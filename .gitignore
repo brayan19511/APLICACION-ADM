@@ -1,0 +1,12 @@
+__pycache_/
+*.pyc
+*.pyo
+*.pyd
+*.vscode/
+*.enviroment/
+*.env/
+.vscode/
+enviroment/
+env/
+output/
+prueba01.rar
