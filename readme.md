@@ -9,7 +9,7 @@ python -m venv enviroment
 ```
 # descargar desde un archivo
 
-pip install -p requirements.txt
+pip install -r requirements.txt
 # instalar a un archivo
 
 pip freeze > requirements.txt
