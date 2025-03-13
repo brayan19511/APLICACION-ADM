@@ -7,11 +7,15 @@ python -m venv enviroment
 ```
 .\enviroment\Scripts\activate
 ```
-# descargar desde un archivo
-
+# Descargar desde un archivo
+```
 pip install -r requirements.txt
-# instalar a un archivo
-
+```
+# Instalar a un archivo
+```
 pip freeze > requirements.txt
-# abrir instalador
+```
+# Abrir instalador
+```
 python -m auto_py_to_exe 
+```
