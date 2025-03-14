@@ -42,8 +42,7 @@ class MainWindow(QMainWindow):
         gestion_menu.addAction(self.action_home ) 
         self.action_gestion_def = QAction("Gestión DEF", self)
         gestion_menu.addAction(self.action_gestion_def) 
-        self.action_gestion_seller = QAction("Gestión DEF Seller", self)
-        gestion_menu.addAction(self.action_gestion_seller) 
+
 
 
 
