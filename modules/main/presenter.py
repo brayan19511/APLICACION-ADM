@@ -29,7 +29,6 @@ class MainPresenter(BasePresenter):
         for view in self.views.values():
             self.view.stacked_widget.addWidget(view)
         # Diccionario de navegacion
-        print(self.views.keys())
         for key in self.views.keys():
             self.view.actions[key].triggered.connect(lambda checke,k=key: self.show_page(k))
 

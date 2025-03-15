@@ -1,5 +1,5 @@
 
-from  PySide6.QtCore import Qt
+from  PySide6.QtCore import Qt,Signal
 from PySide6.QtWidgets import QWidget,QHBoxLayout,QPushButton,QLabel,QLineEdit,QFileDialog
 # ,QMessageBox,QSizePolicy
 # import time
@@ -8,12 +8,12 @@ from PySide6.QtWidgets import QWidget,QHBoxLayout,QPushButton,QLabel,QLineEdit,Q
 
 
 class UploadFile(QWidget):
+    file_selected = Signal(str)
 
-    def __init__(self,layouWidget,progress_widget=None):
+    def __init__(self,layouWidget):
         super().__init__()
         self.file_path = None
         self.uploadWidget(layouWidget)
-        self.progress_widget = progress_widget
 
 
     def uploadWidget(self,layouWidget:QHBoxLayout):
@@ -40,6 +40,7 @@ class UploadFile(QWidget):
         if file:
             self.file_path = file 
             self.inputFile.setText(file)
+            self.file_selected.emit(file)
             # threading.Thread(target=self.simular_progreso, daemon=True).start()
         else:
             self.file_path = None
