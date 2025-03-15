@@ -202,5 +202,29 @@ class ProcesarComercial(BaseModel):
             return f"✅ Archivo guardado en: {file_path}"
         except Exception as e:
             raise ValueError("Error al exportar el archivo")
+    def exportTxt(self, file_path):
+        if not file_path:
+            raise ValueError("No se ha seleccionado un archivo.")
+        if self.df is None:
+            raise ValueError("Aún no se ha cargado el archivo.")
+
+        try:
+            df_cab = pd.DataFrame(self.cabecera)
+            df_det = pd.DataFrame(self.detalle)
+
+            # Obtener la ruta y nombre base sin extensión
+            base_name, _ = os.path.splitext(file_path)
+
+            # Definir los nombres de los archivos TXT
+            cabecera_txt = f"{base_name}_cabecera.txt"
+            detalle_txt = f"{base_name}_detalle.txt"
+
+            # Exportar cada DataFrame a su respectivo archivo TXT
+            df_cab.to_csv(cabecera_txt, sep="\t", index=False)  # TXT separado por tabulador
+            df_det.to_csv(detalle_txt, sep="\t", index=False)  # TXT separado por tabulador
+
+            return f"✅ Archivos guardados en:\n- {cabecera_txt}\n- {detalle_txt}"
+        except Exception as e:
+            raise ValueError(f"Error al exportar los archivos: {e}")
 
     

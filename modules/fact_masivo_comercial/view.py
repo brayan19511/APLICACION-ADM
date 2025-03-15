@@ -59,6 +59,7 @@ class FacturaMasivoComercialView(BaseView):
         botonExcel=QPushButton("Generar Excel")
         botonExcel.clicked.connect(self.ExportarArchivo)
         botonTXT=QPushButton("Generar TXT")
+        botonTXT.clicked.connect(self.ExportarArchivoTXT)
 
         botonLayout.addWidget(botonExcel)
         botonLayout.addWidget(botonTXT )
@@ -150,6 +151,19 @@ class FacturaMasivoComercialView(BaseView):
            
             elif file_path:  # Si el usuario seleccionó una ruta
                 mensaje = self.procesor.exportData(file_path)
+                self.show_message(mensaje, "Exportación")
+        except ValueError as e:
+            self.show_message(str(e),"Problemas con la exportación","warning")
+    def ExportarArchivoTXT(self):
+        """Abre QFileDialog y llama al modelo para exportar"""
+        fecha_actual = datetime.now().strftime("%Y%m%d%H%M%S")
+        file_path, _ = QFileDialog.getSaveFileName(self, "Guardar archivo", f"FAC_MASIVO_{fecha_actual}.xlsx", "Excel Files (*.xlsx)")
+        try:
+            if(self.upload_file_widget.getFile()!= self.procesor.getFilePath()):
+                self.show_message( "Porfavor Cargue el archivo antes de exportar","Advertencia", "error")
+           
+            elif file_path:  # Si el usuario seleccionó una ruta
+                mensaje = self.procesor.exportTxt(file_path)
                 self.show_message(mensaje, "Exportación")
         except ValueError as e:
             self.show_message(str(e),"Problemas con la exportación","warning")
