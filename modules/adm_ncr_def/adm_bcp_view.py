@@ -1,3 +1,4 @@
+from datetime import datetime
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -8,19 +9,22 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
+    QFileDialog
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 from utils.adm_upload_view import UploadFile
-from controllers.adm_def_controller import AdministracionDefController
+from modules.adm_ncr_def.model import NcrBCPProcesor
+from core.view import BaseView
 
 
-class AdmBCPWifget(QWidget):
+class AdmBCPView(BaseView):
 
     def __init__(self):
         super().__init__()
         self.layout_Main = QVBoxLayout()
-        self.adm_def_controller = AdministracionDefController(self)
+        # self.adm_def_controller = AdministracionDefController(self)
+        self.procesor=NcrBCPProcesor()
         titulo = QLabel("Generación Plantilla BCP")
         titulo.setAlignment(Qt.AlignmentFlag.AlignHCenter)  # Centrar texto
         titulo.setFont(QFont("Arial", 16, QFont.Bold))
@@ -75,38 +79,36 @@ class AdmBCPWifget(QWidget):
 
     def CargarArchivo(self):
         try:
-            self.adm_def_controller.CargarDataFrame(self.upload_file_widget.getFile())
-            self.adm_def_controller.validate_columns_BCP()
+            self.procesor.CargarDataFrame(self.upload_file_widget.getFile())
+            self.procesor.validate_columns_BCP()
+            self.procesor.procesarBCP()
             self.cargarTable()
+            pass
         except ValueError as e:
             self.limpiarTable()
-            self.mostrarMensaje(
-                "Problemas procesando y exportando datos", str(e), "error"
-            )
-            print(f"Problemas procesando y exportando datos {e}")
+            self.show_message(str(e),"Problemas con el archivo","warning")
+        except FileNotFoundError as e:  # ✅ Manejo de archivos inexistentes
+            self.limpiarTable()
+            self.show_message(str(e), "Archivo no encontrado", "error")
 
     def ExportarArchivo(self):
+        """Abre QFileDialog y llama al modelo para exportar"""
+        fecha_actual = datetime.now().strftime("%Y%m%d%H%M%S")
+        file_path, _ = QFileDialog.getSaveFileName(self, "Guardar archivo", f"BCP_PLANTILLA_{fecha_actual}.xlsx", "Excel Files (*.xlsx)")
         try:
-            if (
-                self.upload_file_widget.getFile()
-                != self.adm_def_controller.getFilePath()
-            ):
-                self.mostrarMensaje(
-                    "Advertencia",
-                    "Porfavor Cargue el archivo antes de exportar",
-                    "error",
-                )
-                return
-            message = self.adm_def_controller.ExportarDataFrame_bcp("BCP_PLANTILLA")
-            self.mostrarMensaje("Exportación", message)
 
-        except Exception as e:
-            self.mostrarMensaje("Problemas Exportando datos", str(e), "error")
-            print(f"Problemas Exportando datos {e}")
+            if(self.upload_file_widget.getFile()!= self.procesor.getFilePath()):
+                self.show_message("Porfavor Cargue el archivo antes de exportar", "Advertencia", "error")
+                 
+            elif file_path:  # Si el usuario seleccionó una ruta
+                mensaje = self.procesor.ExportarDataFrame_bcp(file_path)
+                self.show_message(mensaje, "Exportación")
+        except ValueError as e:
+            self.show_message(str(e),"Problemas con la exportación","warning")
 
     def cargarTable(self):
         num_filas, monto_filas, num_filas_rev, monto_filas_rev, num_filas_atipicos = (
-            self.adm_def_controller.analizar_dataframe_BCP()
+            self.procesor.analizar_dataframe_BCP()
         )
         valores = [
             f"{num_filas}",
@@ -118,13 +120,7 @@ class AdmBCPWifget(QWidget):
         for row, value in enumerate(valores):
             self.table.setItem(row, 1, QTableWidgetItem(f"{value}"))
 
-    def mostrarMensaje(self, titulo, mensaje, tipo="info"):
-        """Muestra un mensaje en pantalla."""
-        if tipo == "info":
-            QMessageBox.information(self, titulo, mensaje)
-        elif tipo == "error":
-            QMessageBox.warning(self, titulo, mensaje)
 
     def limpiarTable(self):
-        for row in range(4):
+        for row in range(5):
             self.table.setItem(row, 1, QTableWidgetItem("0"))

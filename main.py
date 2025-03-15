@@ -1,6 +1,5 @@
 import sys
 from PySide6.QtWidgets import QApplication
-from controllers.main_controller import MainController
 from modules.main.presenter import MainPresenter
 
 if __name__=='__main__':

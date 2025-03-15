@@ -86,6 +86,7 @@ class AdmDefView(BaseView):
         try:
             self.procesor.CargarDataFrame(self.upload_file_widget.getFile())
             self.procesor.validate_columns_DEF()
+            self.procesor.procesarDEF()
             self.cargarTable()
         except ValueError as e:
             self.limpiarTable()
@@ -99,7 +100,10 @@ class AdmDefView(BaseView):
         fecha_actual = datetime.now().strftime("%Y%m%d%H%M%S")
         file_path, _ = QFileDialog.getSaveFileName(self, "Guardar archivo", f"NCR_DEF_{fecha_actual}.xlsx", "Excel Files (*.xlsx)")
         try:
-            if file_path:  # Si el usuario seleccionó una ruta
+            if(self.upload_file_widget.getFile()!= self.procesor.getFilePath()):
+                self.show_message( "Porfavor Cargue el archivo antes de exportar","Advertencia", "error")
+           
+            elif file_path:  # Si el usuario seleccionó una ruta
                 mensaje = self.procesor.ExportarDataFrame_def(file_path)
                 self.show_message(mensaje, "Exportación")
         except ValueError as e:
@@ -123,5 +127,5 @@ class AdmDefView(BaseView):
 
 
     def limpiarTable(self):
-        for row in range(4):
+        for row in range(5):
             self.table.setItem(row, 1, QTableWidgetItem("0"))

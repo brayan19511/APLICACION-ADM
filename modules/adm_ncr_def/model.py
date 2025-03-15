@@ -195,8 +195,139 @@ class NcrDefProcesor:
     
     
     
+
+class NcrBCPProcesor:
+    def __init__(self,path=None):
+        self.path=path
+        self.df=None
+        self.df_bcp=None
+    def getFilePath(self):
+        return self.path
+    def getDf(self):
+        return self.df_bcp
+    def CargarDataFrame(self,file_path):
+        if file_path=="" or file_path is None:
+            raise ValueError(f"No se ha seleccionado un arhivo.")
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"El archivo '{file_path}' no existe.")
+        try:
+            self.path=file_path
+            self.df= pd.read_excel(
+                                file_path, 
+                                dtype={
+                                        'Cuenta Seleccionada': str,"Clasificacion Banco":str
+                                        ,'N° DOCUMENTO':str,'DNI/RUC':str
+                                        ,'N° CUENTA':str,'CCI':str
+                                       }
+                                   )
+        except Exception as e:
+            raise ValueError(f"❌ Error al exportar el archivo: {str(e)}")
+    def validate_columns_BCP(self):
+        REQUIREMENT_COLUMNS=['Clasificacion Banco',
+                        'Cuenta Seleccionada',
+                        'Clasificacion Doc',
+                        'DNI/RUC',
+                        'NOMBRE CLIENTE/RAZÓN SOCIAL',
+                        'IMPORTE',
+                        'DEF FORMATEADO',
+                        ]
+        
+        missing_columns = [col for col in REQUIREMENT_COLUMNS if col not in self.df.columns]
+        
+        if missing_columns:
+            self.df=None
+            raise ValueError(f"❌ Faltan las siguientes columnas: {', '.join(missing_columns)}")
+             
+    def procesarBCP(self):
+        self.df=self.df[self.df["ESTADO"]=="Datos Bancarios"].copy()
+        self.Plantilla()
+
+    def Plantilla(self)->pd.DataFrame:
+        # df_plantilla=pd.read_excel('plantilla_lista.xlsx', dtype={'Cuenta Seleccionada': str,'DNI/RUC':str})
+        plantillaBcp=[]
+        for index,row in self.df.iterrows():
+
+            fila1={
+                "Tipo de Registro":"A",
+                "Tipo de Cuenta de Abono":row["Clasificacion Banco"],
+                "Cuenta de Abono":row["Cuenta Seleccionada"],
+                "Tipo de Documento de Identidad":row["Clasificacion Doc"],
+                "Número de Documento de Identidad":row["DNI/RUC"],
+                "Correlativo de Documento de Identidad":"",
+                "Nombre del proveedor":row["NOMBRE CLIENTE/RAZÓN SOCIAL"],
+                "Tipo de Moneda de Abono":"S",
+                "Monto del Abono":row["IMPORTE"],
+                "Validación IDC del proveedor vs Cuenta":"S",
+                "Cantidad Documentos relacionados al Abono":"0001",
+
+                "Tipo de Documento a pagar":"",
+                "Nro. del Documento":"",
+                "Moneda Documento":"",
+                "Monto del Documento":"",
+
+            }
+            fila2={
+                "Tipo de Registro":"D",
+                "Tipo de Cuenta de Abono":"",
+                "Cuenta de Abono":"",
+                "Tipo de Documento de Identidad":"",
+                "Número de Documento de Identidad":"",
+                "Correlativo de Documento de Identidad":"",
+                "Nombre del proveedor":"",
+                "Tipo de Moneda de Abono":"",
+                "Monto del Abono":"",
+                "Validación IDC del proveedor vs Cuenta":"",
+                "Cantidad Documentos relacionados al Abono":"",
+
+                "Tipo de Documento a pagar":"C",
+                "Nro. del Documento":row["DEF FORMATEADO"],
+                "Moneda Documento":"S",
+                "Monto del Documento":row["IMPORTE"]
+
+            }
+
+            plantillaBcp.append(fila1)
+            plantillaBcp.append(fila2)
+
+
+        self.df_bcp=pd.DataFrame(plantillaBcp)
+        # return df_plantillaBcp
+    def analizar_dataframe_BCP(self):
+
+
+        num_filas,monto_filas,num_filas_rev,monto_filas_rev,num_filas_atipicos=0,0,0,0,0
+        num_filas=self.df.shape[0]
+        monto_filas=self.df["IMPORTE"].sum()
+        num_filas_rev=self.df[
+            self.df["Doc. Verificar"].str.contains("revisar",na=False) |
+            self.df["Clasificacion Banco"].str.contains("revisar",na=False)
+        ].shape[0]
+        monto_filas_rev=self.df[
+            self.df["Doc. Verificar"].str.contains("revisar",na=False) |
+            self.df["Clasificacion Banco"].str.contains("revisar",na=False)
+        ]["IMPORTE"].sum()
+        num_filas_atipicos=self.df[self.df["IMPORTE"]>1500].shape[0]
+        return num_filas,monto_filas,num_filas_rev,monto_filas_rev,num_filas_atipicos
+
+    def ExportarDataFrame_bcp(self,file_path="export.xlsx"):
+        if file_path=="" or file_path is None:
+            raise ValueError(f"No se ha seleccionado un arhivo.")
+        if self.df is None:
+            raise ValueError("Aun no se ha cargado el archivo.")
+        if self.df_bcp is None:
+            raise ValueError("Aun no se ha procesado el archivo.")
+
+        try:
+            # if not file_path:
+            #     return "❌ Exportación cancelada."
+                
+            self.df_bcp.to_excel(file_path, index=False)
+
+            return f"✅ Archivo guardado en: {file_path}"
+        except Exception as e:
+            raise ValueError("Error al cargar el archivo")
+            # print(f"Error al cargar el archivo: {e}")
+
+
+
     
-
-        
-
-        
