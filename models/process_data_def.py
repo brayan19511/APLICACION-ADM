@@ -78,6 +78,13 @@ class DefProcessor:
         self.df.insert(11,'Clasificacion Doc',self.df.pop('Clasificacion Doc'))
         self.df.insert(21,'Clasificacion Banco',self.df.pop('Clasificacion Banco'))
         self.df.insert(22,'Cuenta Seleccionada',self.df.pop('Cuenta Seleccionada'))
+    
+    
+    
+    
+    
+    
+    
     def Plantilla(self)->pd.DataFrame:
         # df_plantilla=pd.read_excel('plantilla_lista.xlsx', dtype={'Cuenta Seleccionada': str,'DNI/RUC':str})
         plantillaBcp=[]

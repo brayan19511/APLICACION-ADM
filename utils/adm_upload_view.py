@@ -11,6 +11,7 @@ class UploadFile(QWidget):
 
     def __init__(self,layouWidget,progress_widget=None):
         super().__init__()
+        self.file_path = None
         self.uploadWidget(layouWidget)
         self.progress_widget = progress_widget
 
@@ -31,7 +32,7 @@ class UploadFile(QWidget):
         layout_upload.addWidget(self.inputFile)
         layout_upload.addWidget(btnExaminar)
         
-        layouWidget.addWidget(upload_widget,1)
+        layouWidget.addWidget(upload_widget)
         layouWidget.setAlignment(upload_widget,Qt.AlignmentFlag.AlignTop) 
 
     def openFileDialog(self):
