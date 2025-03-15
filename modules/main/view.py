@@ -22,10 +22,15 @@ class MainView(QMainWindow):
     def create_menu_bar(self):
         """Crea la barra de menú."""
         menu_bar = self.menuBar()
-        gestion_menu = menu_bar.addMenu("Administración")
 
-        self.action_home = QAction("Home", self)
-        gestion_menu.addAction(self.action_home)
-
-        self.action_gestion_def = QAction("Gestión DEF", self)
-        gestion_menu.addAction(self.action_gestion_def)
+        menu_structure={
+            "Administración":{"gestion_def":"Gestión DEF"}
+            ,"Facturación": {"facturacion_comercial": "Masivo Comercial","descargar_fact":"Descarga Masiva"}
+        }
+        self.actions = {}
+        for menu_name,actions in menu_structure.items():
+            menu=menu_bar.addMenu(menu_name)
+            for action_key,action_text in actions.items():
+                action=QAction(action_text,self)
+                menu.addAction(action)
+                self.actions[action_key]=action

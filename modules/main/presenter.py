@@ -1,12 +1,12 @@
 from core.presenter import BasePresenter
 from modules.main.model import MainModel
 from modules.main.view import MainView
-# from modules.adm_def.view import ContainerDefView
 from PySide6.QtWidgets import QLabel
 from PySide6.QtGui import QFont
 from PySide6.QtCore import Qt
 
 from modules.adm_ncr_def.presenter import AdmDefPresenter
+from modules.fact_masivo_comercial.presenter import FacturasMasivoComercialPresenter
 
 
 class MainPresenter(BasePresenter):
@@ -17,19 +17,21 @@ class MainPresenter(BasePresenter):
 
         # inicializamos pagina
         self.amd_ncr_def=AdmDefPresenter()
+        self.fact_comercial=FacturasMasivoComercialPresenter()
 
         # Diccionario de vistas
         self.views = {
+            "facturacion_comercial":self.fact_comercial.get_view(),
             "gestion_def":self.amd_ncr_def.get_view(),
-            # "home": home_label,
         }
 
         # Agregar las páginas al stacked_widget
         for view in self.views.values():
             self.view.stacked_widget.addWidget(view)
-
-        # Configurar navegación
-        self.view.action_gestion_def.triggered.connect(lambda: self.show_page("gestion_def"))
+        # Diccionario de navegacion
+        print(self.views.keys())
+        for key in self.views.keys():
+            self.view.actions[key].triggered.connect(lambda checke,k=key: self.show_page(k))
 
     def show_page(self, page_name):
         """Muestra la página seleccionada."""
