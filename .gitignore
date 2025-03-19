@@ -8,5 +8,5 @@ __pycache_/
 .vscode/
 enviroment/
 env/
-output/
+# output/
 prueba01.rar
