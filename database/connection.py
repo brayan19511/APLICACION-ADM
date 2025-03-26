@@ -18,9 +18,6 @@ class DataBaseManager:
 class SAPDataBaseManager(DataBaseManager):
     """Conexion a la base de datos de SAP por ODBC"""
     def __init__(self):
-        # print(DATABASE_DSN)
-        # print(DATABASE_USER)
-        # print(DATABASE_PASS)
         self.conn=pyodbc.connect(f"DSN={DATABASE_DSN};UID={DATABASE_USER};PWD={DATABASE_PASS}")
         
     def fetch_data_param(self,query,params=None):

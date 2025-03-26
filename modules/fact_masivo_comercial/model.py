@@ -31,8 +31,7 @@ class ProcesarComercial(BaseModel):
             self.path=""
             raise ValueError(f"❌ Error al exportar el archivo: {str(e)}")
     def validate_columns(self):
-        REQUIREMENT_COLUMNS=['RUC','COMENTARIO','GLOSA DE FACTURA','MONEDA','VALOR DE VENTA','TOTAL'
-                        ]
+        REQUIREMENT_COLUMNS=['RUC','GLOSA DE FACTURA','MONEDA','VALOR DE VENTA','TOTAL' ]
         
         missing_columns = [col for col in REQUIREMENT_COLUMNS if col not in self.df.columns]
         
@@ -69,6 +68,8 @@ class ProcesarComercial(BaseModel):
         })
         self.df["CODIGO"]=self.df["RUC"].apply(lambda x: f"C{x}")
         self.df["MONEDA"]=self.df["MONEDA"].str.upper()
+        if "COMENTARIO" not in self.df.columns:
+            self.df["COMENTARIO"] = self.df["GLOSA DE FACTURA"]
         self.df["COMENTARIO"]=self.df["COMENTARIO"].str.upper()
         self.df["GLOSA DE FACTURA"]=self.df["GLOSA DE FACTURA"].str.upper()
         self.df["COMENTARIO"]=self.df["COMENTARIO"].apply(lambda x : x.translate(validacionTexto))
@@ -85,6 +86,9 @@ class ProcesarComercial(BaseModel):
         self.df["PERDETRACCION"]=self.df["TIPDETRACCION"].apply(lambda x : "12" if x=="SI" else "0")
 
         self.df["VALDETRACCION"]=self.df.apply(lambda row : self.calcular_detraccion(row["TIPDETRACCION"],row["CURRENCY"],row["TOTAL"]),axis=1)
+        # C20300263578 037 PENDIENTE CROOSDOCKING
+
+
     
     def calcular_detraccion(self,tipdetra,moneda, total):
         if tipdetra =='SI'and moneda == "S/":
