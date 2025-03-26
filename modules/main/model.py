@@ -1,3 +1,5 @@
+
+
 class MainModel:
     """Modelo del módulo principal, almacena el estado."""
     

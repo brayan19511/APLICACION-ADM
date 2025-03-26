@@ -35,7 +35,7 @@ class FacturaMasivoComercialView(BaseView):
         headerLayout=QHBoxLayout(headerWidget)
         sheetCombo=QLabel("Seleccione la hoja: ")
         self.combo_sheet = QComboBox()
-        folio=QLabel("Ultimo Folio: ")
+        folio=QLabel("Siguiente Folio: ")
         self.folioTxt=QLineEdit()
         tc=QLabel("T.C :")
         self.tcTxt=QLineEdit()

@@ -22,6 +22,8 @@ class ProcesarComercial(BaseModel):
         if folio=="" or tc=="":
             raise ValueError(f"Por favor complete todos los campos")
         try:
+            # if self.df is not None:
+            #     self.df=None
             self.path=file_path
             self.folio=folio
             self.tc=tc
@@ -29,6 +31,7 @@ class ProcesarComercial(BaseModel):
 
         except Exception as e:
             self.path=""
+            self.df=None
             raise ValueError(f"❌ Error al exportar el archivo: {str(e)}")
     def validate_columns(self):
         REQUIREMENT_COLUMNS=['RUC','GLOSA DE FACTURA','MONEDA','VALOR DE VENTA','TOTAL' ]
@@ -66,7 +69,7 @@ class ProcesarComercial(BaseModel):
             "Ú":"U"
 
         })
-        self.df["CODIGO"]=self.df["RUC"].apply(lambda x: f"C{x}")
+        self.df["CODIGO"]=self.df["RUC"].apply(lambda x: f"C{int(x)}" if pd.notna(x) and str(x).strip()!="" else "revisar")
         self.df["MONEDA"]=self.df["MONEDA"].str.upper()
         if "COMENTARIO" not in self.df.columns:
             self.df["COMENTARIO"] = self.df["GLOSA DE FACTURA"]
@@ -101,7 +104,8 @@ class ProcesarComercial(BaseModel):
         filasrev,doc,docsol,docdol,monto,montosol,montodol=0,0,0,0,0,0,0
         filasrev=self.df[
             self.df["CURRENCY"].str.contains("revisar",na=False) |
-            self.df["CUENTA"].str.contains("revisar",na=False)
+            self.df["CUENTA"].str.contains("revisar",na=False)   |
+            self.df["CODIGO"].str.contains("revisar",na=False)
         ].shape[0]
         doc=self.df.shape[0]
         docsol=self.df[self.df["CURRENCY"]=="S/"].shape[0]
@@ -112,6 +116,8 @@ class ProcesarComercial(BaseModel):
         return filasrev,doc,docsol,docdol,monto,montosol,montodol
 
     def CargaPlantilla(self):
+        self.cabecera=[]
+        self.detalle=[]
         fecha1=pd.Timestamp.today().strftime("%Y%m%d")
         fecha2=(pd.Timestamp.today()+pd.DateOffset(days=30)).strftime("%Y%m%d")
 
