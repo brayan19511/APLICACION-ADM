@@ -25,7 +25,7 @@ class MainView(QMainWindow):
 
         menu_structure={
             "Administración":{"gestion_def":"Gestión DEF"}
-            ,"Facturación": {"facturacion_comercial": "Masivo Comercial","descargar_fact":"Descarga Masiva"}
+            ,"Facturación": {"facturacion_comercial": "Masivo Comercial","descargar_fact":"NCR Masiva"}
         }
         self.actions = {}
         for menu_name,actions in menu_structure.items():

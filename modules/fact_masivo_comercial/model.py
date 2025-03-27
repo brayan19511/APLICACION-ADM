@@ -185,7 +185,7 @@ class ProcesarComercial(BaseModel):
             det={
                 'ParentKey':index+1,
                 'LineNum':"1",
-                'U_MSS_SERVEN':"SV004",
+                'U_MSS_SERVEN':"SV0004",
                 'ItemDescription':row["GLOSA DE FACTURA"],
                 'PriceAfterVAT':row["TOTAL"],
                 'AccountCode':"759600000",
