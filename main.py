@@ -2,9 +2,9 @@ import logging
 from pathlib import Path
 import sys
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QLockFile, QStandardPaths, QTimer
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from core.app_info import APP_NAME, APP_VERSION
 from core.update_service import UpdateController
@@ -35,11 +35,35 @@ def update_health_file() -> Path | None:
         return None
 
 
+def acquire_instance_lock() -> QLockFile | None:
+    data_dir = Path(
+        QStandardPaths.writableLocation(
+            QStandardPaths.StandardLocation.AppLocalDataLocation
+        )
+    )
+    data_dir.mkdir(parents=True, exist_ok=True)
+    lock = QLockFile(str(data_dir / "ADM.lock"))
+    lock.setStaleLockTime(15_000)
+    if lock.tryLock(100):
+        return lock
+    QMessageBox.warning(
+        None,
+        "ADM ya está abierto",
+        "Ya existe otra instancia de ADM en ejecución. "
+        "Ciérrela antes de abrir o actualizar la aplicación.",
+    )
+    return None
+
+
 def run():
     configure_logging()
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setApplicationVersion(APP_VERSION)
+    instance_lock = acquire_instance_lock()
+    if instance_lock is None:
+        return 0
+    app.instance_lock = instance_lock
     icon = resource_path("assets/favicon.ico")
     if icon.exists():
         app.setWindowIcon(QIcon(str(icon)))

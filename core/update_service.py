@@ -175,9 +175,22 @@ class GitHubReleaseUpdater:
 )
 $ErrorActionPreference = "Stop"
 $Backup = "$Target.bak"
+$Restored = $false
 try {
     Wait-Process -Id $PidToWait -ErrorAction SilentlyContinue
-    Start-Sleep -Milliseconds 500
+    Start-Sleep -Seconds 2
+
+    $TargetPath = [System.IO.Path]::GetFullPath($Target)
+    $OtherInstances = Get-CimInstance Win32_Process -Filter "Name = 'ADM.exe'" -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.ExecutablePath -and
+            [System.IO.Path]::GetFullPath($_.ExecutablePath) -eq $TargetPath
+        }
+    foreach ($Instance in $OtherInstances) {
+        Stop-Process -Id $Instance.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+    Start-Sleep -Seconds 2
+
     if (Test-Path -LiteralPath $Backup) {
         Remove-Item -LiteralPath $Backup -Force
     }
@@ -207,9 +220,9 @@ try {
             Move-Item -LiteralPath $Backup -Destination $Target -Force
         }
         Start-Process -FilePath $Target
-        throw "La versión nueva no confirmó un inicio correcto."
+        $Restored = $true
     }
-    if (Test-Path -LiteralPath $Backup) {
+    elseif (Test-Path -LiteralPath $Backup) {
         Remove-Item -LiteralPath $Backup -Force
     }
 }
@@ -217,7 +230,7 @@ catch {
     if ((Test-Path -LiteralPath $Backup) -and -not (Test-Path -LiteralPath $Target)) {
         Move-Item -LiteralPath $Backup -Destination $Target -Force
     }
-    if (Test-Path -LiteralPath $Target) {
+    if ((Test-Path -LiteralPath $Target) -and -not $Restored) {
         Start-Process -FilePath $Target
     }
 }
