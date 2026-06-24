@@ -45,8 +45,8 @@ La aplicación consulta el último GitHub Release del repositorio configurado en
 3. Crear y subir un tag con la misma versión:
 
 ```powershell
-git tag v2.1.4
-git push origin v2.1.4
+git tag v2.2.3
+git push origin v2.2.3
 ```
 
 GitHub Actions ejecutará las pruebas, construirá `ADM.exe`, generará

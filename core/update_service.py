@@ -198,6 +198,14 @@ try {
         Move-Item -LiteralPath $Target -Destination $Backup -Force
     }
     Move-Item -LiteralPath $Source -Destination $Target -Force
+
+    # El helper nace como hijo de una aplicación PyInstaller one-file.
+    # No debe transmitir al nuevo EXE la carpeta _MEI de la versión anterior.
+    Get-ChildItem Env: |
+        Where-Object { $_.Name -like "_PYI*" } |
+        ForEach-Object { Remove-Item "Env:$($_.Name)" -ErrorAction SilentlyContinue }
+    $env:PYINSTALLER_RESET_ENVIRONMENT = "1"
+
     $NewProcess = Start-Process -FilePath $Target -ArgumentList @("--update-health-file", $HealthFile) -PassThru
     $Healthy = $false
     for ($Attempt = 0; $Attempt -lt 60; $Attempt++) {
@@ -219,6 +227,7 @@ try {
         if (Test-Path -LiteralPath $Backup) {
             Move-Item -LiteralPath $Backup -Destination $Target -Force
         }
+        $env:PYINSTALLER_RESET_ENVIRONMENT = "1"
         Start-Process -FilePath $Target
         $Restored = $true
     }
@@ -231,6 +240,7 @@ catch {
         Move-Item -LiteralPath $Backup -Destination $Target -Force
     }
     if ((Test-Path -LiteralPath $Target) -and -not $Restored) {
+        $env:PYINSTALLER_RESET_ENVIRONMENT = "1"
         Start-Process -FilePath $Target
     }
 }
@@ -242,6 +252,11 @@ finally {
             encoding="utf-8-sig",
         )
         creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        clean_environment = os.environ.copy()
+        for name in tuple(clean_environment):
+            if name.startswith("_PYI"):
+                clean_environment.pop(name, None)
+        clean_environment["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
         subprocess.Popen(
             [
                 "powershell.exe",
@@ -261,6 +276,7 @@ finally {
             ],
             creationflags=creation_flags,
             close_fds=True,
+            env=clean_environment,
         )
 
 
