@@ -1,0 +1,62 @@
+name: Build and publish ADM
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Validate release version
+        shell: pwsh
+        run: |
+          $tagVersion = "${{ github.ref_name }}".TrimStart("v")
+          $appVersion = python -c "from core.app_info import APP_VERSION; print(APP_VERSION)"
+          if ($tagVersion -ne $appVersion) {
+            throw "El tag $tagVersion no coincide con APP_VERSION=$appVersion"
+          }
+
+      - name: Run tests
+        shell: pwsh
+        run: python -m unittest discover -s tests -v
+
+      - name: Build executable
+        shell: pwsh
+        run: pyinstaller --clean --noconfirm ADM.spec
+
+      - name: Generate checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash dist/ADM.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  ADM.exe" | Set-Content dist/ADM.exe.sha256 -Encoding ascii
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" `
+            dist/ADM.exe `
+            dist/ADM.exe.sha256 `
+            --title "ADM ${{ github.ref_name }}" `
+            --generate-notes
