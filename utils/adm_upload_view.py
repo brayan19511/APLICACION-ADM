@@ -10,13 +10,13 @@ from PySide6.QtWidgets import QWidget,QHBoxLayout,QPushButton,QLabel,QLineEdit,Q
 class UploadFile(QWidget):
     file_selected = Signal(str)
 
-    def __init__(self,layouWidget):
+    def __init__(self, layouWidget):
         super().__init__()
         self.file_path = None
         self.uploadWidget(layouWidget)
 
 
-    def uploadWidget(self,layouWidget:QHBoxLayout):
+    def uploadWidget(self, layouWidget: QHBoxLayout):
         
         upload_widget=QWidget()
         layout_upload=QHBoxLayout(upload_widget)
@@ -36,15 +36,20 @@ class UploadFile(QWidget):
         layouWidget.setAlignment(upload_widget,Qt.AlignmentFlag.AlignTop) 
 
     def openFileDialog(self):
-        file,_=QFileDialog.getOpenFileName(self,"Abrir archivo Excel","","Archivos Excel (*.xls *.xlsx *.xlsm)")
+        file, _ = QFileDialog.getOpenFileName(
+            self,
+            "Abrir archivo Excel",
+            "",
+            "Archivos Excel (*.xls *.xlsx *.xlsm)",
+        )
         if file:
             self.file_path = file 
             self.inputFile.setText(file)
             self.file_selected.emit(file)
             # threading.Thread(target=self.simular_progreso, daemon=True).start()
         else:
-            self.file_path = None
-            self.inputFile.setText("")
+            # Cancelar el diálogo no debe olvidar un archivo ya seleccionado.
+            return
 
     def getFile(self):
         return self.file_path

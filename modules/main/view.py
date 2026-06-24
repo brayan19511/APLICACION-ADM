@@ -1,12 +1,13 @@
 from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QStackedWidget
 from PySide6.QtGui import QAction
+from core.app_info import APP_VERSION
 
 class MainView(QMainWindow):
     """Vista principal de la aplicación."""
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Aplicación Administración")
+        self.setWindowTitle(f"Aplicación Administración — v{APP_VERSION}")
         self.resize(1000, 650)
 
         central_widget = QWidget()
@@ -25,7 +26,7 @@ class MainView(QMainWindow):
 
         menu_structure={
             "Administración":{"gestion_def":"Gestión DEF"}
-            ,"Facturación": {"facturacion_comercial": "Masivo Comercial","descargar_fact":"NCR Masiva"}
+            ,"Facturación": {"facturacion_comercial": "Masivo Comercial"}
         }
         self.actions = {}
         for menu_name,actions in menu_structure.items():

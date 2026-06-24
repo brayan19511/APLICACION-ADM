@@ -1,240 +1,283 @@
-import os
-from  core.model import BaseModel
+from __future__ import annotations
+
+from pathlib import Path
+import unicodedata
+
 import pandas as pd
-import numpy as np
+
+from core.business_config import CommercialRules
+from core.dataframe_schema import (
+    clean_text,
+    normalize_columns,
+    numeric_series,
+    require_columns,
+)
+from core.exceptions import ExportError, ValidationError
+from core.model import BaseModel
+
+
+COMMERCIAL_ALIASES = {
+    "RUC": ("NUMERO RUC", "NRO RUC"),
+    "COMENTARIO": ("COMENTARIOS", "GLOSA"),
+    "GLOSA DE FACTURA": ("GLOSA FACTURA", "DESCRIPCION FACTURA"),
+    "MONEDA": ("CURRENCY", "DIVISA"),
+    "VALOR DE VENTA": ("VALOR VENTA", "SUBTOTAL"),
+    "TOTAL": ("IMPORTE TOTAL", "MONTO TOTAL"),
+}
+
+COMMERCIAL_REQUIRED_COLUMNS = (
+    "RUC",
+    "GLOSA DE FACTURA",
+    "MONEDA",
+    "VALOR DE VENTA",
+    "TOTAL",
+)
+
+
+def _sap_text(value: object) -> str:
+    text = unicodedata.normalize("NFKD", str(value or "").upper())
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    return text.replace("/", "").replace("\\", "")
+
 
 class ProcesarComercial(BaseModel):
-    def __init__(self):
+    def __init__(self, rules: CommercialRules | None = None):
         super().__init__()
-        self.cabecera=[]
-        self.detalle=[]
-    
+        self.rules = rules or CommercialRules()
+        self.cabecera: list[dict] = []
+        self.detalle: list[dict] = []
+        self.folio = 0
+        self.tc = 0.0
+
     def getFilePath(self):
         return self.path
+
     def getDf(self):
         return self.df
-    
-    def CargarDataFrame(self,file_path,sheet_name,folio,tc):
-        if file_path=="" or file_path is None:
-            raise ValueError(f"No se ha seleccionado un arhivo.")
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"El archivo '{file_path}' no existe.")
-        if folio=="" or tc=="":
-            raise ValueError(f"Por favor complete todos los campos")
-        try:
-            # if self.df is not None:
-            #     self.df=None
-            self.path=file_path
-            self.folio=folio
-            self.tc=tc
-            self.df:pd.DataFrame= pd.read_excel( file_path, sheet_name=sheet_name )
 
-        except Exception as e:
-            self.path=""
-            self.df=None
-            raise ValueError(f"❌ Error al exportar el archivo: {str(e)}")
+    def CargarDataFrame(self, file_path, sheet_name, folio, tc):
+        if not file_path:
+            raise ValidationError("No se ha seleccionado un archivo.")
+        path = Path(file_path)
+        if not path.is_file():
+            raise FileNotFoundError(f"El archivo '{path}' no existe.")
+        if sheet_name in (None, ""):
+            raise ValidationError("Seleccione una hoja del archivo.")
+        try:
+            self.folio = int(folio)
+            self.tc = float(tc)
+        except (TypeError, ValueError) as exc:
+            raise ValidationError("El folio y el tipo de cambio deben ser números.") from exc
+        if self.folio <= 0 or self.tc <= 0:
+            raise ValidationError("El folio y el tipo de cambio deben ser mayores que cero.")
+        try:
+            raw = pd.read_excel(path, sheet_name=sheet_name, dtype=object)
+            self.df = normalize_columns(raw, COMMERCIAL_ALIASES)
+            self.path = str(path.resolve())
+        except ValidationError:
+            raise
+        except Exception as exc:
+            self.path = None
+            self.df = None
+            raise ValidationError(f"No se pudo leer el archivo Excel: {exc}") from exc
+
     def validate_columns(self):
-        REQUIREMENT_COLUMNS=['RUC','GLOSA DE FACTURA','MONEDA','VALOR DE VENTA','TOTAL' ]
-        
-        missing_columns = [col for col in REQUIREMENT_COLUMNS if col not in self.df.columns]
-        
-        if missing_columns:
-            self.df=None
-            raise ValueError(f"❌ Faltan las siguientes columnas: {', '.join(missing_columns)}")
+        require_columns(self.df, COMMERCIAL_REQUIRED_COLUMNS)
 
     def ProcesarData(self):
-        self.df=self.df[['RUC','COMENTARIO','GLOSA DE FACTURA','MONEDA','VALOR DE VENTA','TOTAL']]
+        self.validate_columns()
+        assert self.df is not None
+        if "COMENTARIO" not in self.df.columns:
+            self.df["COMENTARIO"] = self.df["GLOSA DE FACTURA"]
+        selected = (*COMMERCIAL_REQUIRED_COLUMNS, "COMENTARIO")
+        self.df = self.df.loc[:, list(dict.fromkeys(selected))].copy()
+        self.df["TOTAL"] = numeric_series(self.df["TOTAL"], "TOTAL")
+        self.df["VALOR DE VENTA"] = numeric_series(
+            self.df["VALOR DE VENTA"], "VALOR DE VENTA"
+        )
         self.cargaColumnas()
 
     def cargaColumnas(self):
-        validacionMoneda=   {
-                "SOL":"S/",
-                "SOLES":"S/",
-                "S/.":"S/",
-                "S":"S/",
-                "S/":"S/",
-                "DOL":"US$",
-                "DOLARES":"US$",
-                "$":"US$",
-                "US$":"US$"
-            }
-        validacionTexto=str.maketrans({
-            "Ñ":"N",
-            "/":"",
-            "\\":"",
-            "Á":"A",
-            "É":"E",
-            "Í":"I",
-            "Ó":"O",
-            "Ú":"U"
+        assert self.df is not None
+        ruc = clean_text(self.df["RUC"]).str.replace(r"\.0$", "", regex=True)
+        valid_ruc = ruc.str.fullmatch(r"\d{11}")
+        self.df["CODIGO"] = ruc.where(valid_ruc, "").apply(
+            lambda value: f"C{value}" if value else "revisar"
+        )
+        self.df["MONEDA"] = clean_text(self.df["MONEDA"]).str.upper()
+        self.df["COMENTARIO"] = clean_text(self.df["COMENTARIO"]).apply(_sap_text)
+        fallback = clean_text(self.df["GLOSA DE FACTURA"]).apply(_sap_text)
+        self.df["COMENTARIO"] = self.df["COMENTARIO"].where(
+            self.df["COMENTARIO"].ne(""), fallback
+        )
+        self.df["GLOSA DE FACTURA"] = fallback
+        self.df["CURRENCY"] = (
+            self.df["MONEDA"].map(self.rules.currency_aliases).fillna("revisar")
+        )
+        self.df["CUENTA"] = (
+            self.df["CURRENCY"]
+            .map(self.rules.account_by_currency)
+            .fillna("revisar")
+        )
+        pen_amount = self.df["TOTAL"].where(
+            self.df["CURRENCY"].eq("S/"), self.df["TOTAL"] * self.tc
+        )
+        has_detraction = pen_amount.ge(self.rules.detraction_threshold_pen) & (
+            self.df["CURRENCY"].isin(("S/", "US$"))
+        )
+        self.df["TIPDETRACCION"] = has_detraction.map({True: "SI", False: "NO"})
+        self.df["CODDETRACCION"] = has_detraction.map(
+            {True: self.rules.detraction_code, False: "0"}
+        )
+        percentage = str(round(self.rules.detraction_rate * 100))
+        self.df["PERDETRACCION"] = has_detraction.map(
+            {True: percentage, False: "0"}
+        )
+        self.df["VALDETRACCION"] = (
+            pen_amount.where(has_detraction, 0) * self.rules.detraction_rate
+        ).round(4)
 
-        })
-        self.df["CODIGO"]=self.df["RUC"].apply(lambda x: f"C{int(x)}" if pd.notna(x) and str(x).strip()!="" else "revisar")
-        self.df["MONEDA"]=self.df["MONEDA"].str.upper()
-        if "COMENTARIO" not in self.df.columns:
-            self.df["COMENTARIO"] = self.df["GLOSA DE FACTURA"]
-        self.df["COMENTARIO"]=self.df["COMENTARIO"].str.upper()
-        self.df["GLOSA DE FACTURA"]=self.df["GLOSA DE FACTURA"].str.upper()
-        self.df["COMENTARIO"]=self.df["COMENTARIO"].apply(lambda x : x.translate(validacionTexto))
-        self.df["GLOSA DE FACTURA"]=self.df["GLOSA DE FACTURA"].apply(lambda x : x.translate(validacionTexto))
-        self.df["CURRENCY"]=self.df["MONEDA"].map(validacionMoneda).fillna("revisar")
-        self.df["CUENTA"]=self.df["CURRENCY"].apply(lambda x: "121210170" if x=="S/" else "121210230" if x == "US$" else "revisar")
-        self.df["TIPDETRACCION"]=self.df.apply(lambda row :   "SI" if
-                                                        (row["CURRENCY"]=="US$" and row["TOTAL"]*self.tc>=700) or   
-                                                        (row["CURRENCY"]=="S/"  and row["TOTAL"]>=700)
-                                                    else "NO"   
-                                    ,axis=1
-                                    )
-        self.df["CODDETRACCION"]=self.df["TIPDETRACCION"].apply(lambda x : "022" if x=="SI" else "0")
-        self.df["PERDETRACCION"]=self.df["TIPDETRACCION"].apply(lambda x : "12" if x=="SI" else "0")
+    def calcular_detraccion(self, tipdetra, moneda, total):
+        if tipdetra != "SI":
+            return 0
+        amount = float(total) if moneda == "S/" else float(total) * self.tc
+        return round(amount * self.rules.detraction_rate, 4)
 
-        self.df["VALDETRACCION"]=self.df.apply(lambda row : self.calcular_detraccion(row["TIPDETRACCION"],row["CURRENCY"],row["TOTAL"]),axis=1)
-        # C20300263578 037 PENDIENTE CROOSDOCKING
-
-
-    
-    def calcular_detraccion(self,tipdetra,moneda, total):
-        if tipdetra =='SI'and moneda == "S/":
-            return round(total * 0.12,4)
-        elif tipdetra =='SI'and moneda == "US$":
-            return round(total * 0.12 * self.tc,4)
-        else:
-            return 0  # Para otros casos
     def analizarData(self):
-        filasrev,doc,docsol,docdol,monto,montosol,montodol=0,0,0,0,0,0,0
-        filasrev=self.df[
-            self.df["CURRENCY"].str.contains("revisar",na=False) |
-            self.df["CUENTA"].str.contains("revisar",na=False)   |
-            self.df["CODIGO"].str.contains("revisar",na=False)
-        ].shape[0]
-        doc=self.df.shape[0]
-        docsol=self.df[self.df["CURRENCY"]=="S/"].shape[0]
-        docdol=self.df[self.df["CURRENCY"]=="US$"].shape[0]
-        monto=self.df["TOTAL"].sum()
-        montosol=self.df[self.df["CURRENCY"]=="S/"]["TOTAL"].sum()
-        montodol=self.df[self.df["CURRENCY"]=="US$"]["TOTAL"].sum()
-        return filasrev,doc,docsol,docdol,monto,montosol,montodol
+        if self.df is None:
+            raise ValidationError("Aún no se ha procesado un archivo.")
+        review = (
+            self.df["CURRENCY"].eq("revisar")
+            | self.df["CUENTA"].eq("revisar")
+            | self.df["CODIGO"].eq("revisar")
+        )
+        return (
+            int(review.sum()),
+            len(self.df),
+            int(self.df["CURRENCY"].eq("S/").sum()),
+            int(self.df["CURRENCY"].eq("US$").sum()),
+            self.df["TOTAL"].sum(),
+            self.df.loc[self.df["CURRENCY"].eq("S/"), "TOTAL"].sum(),
+            self.df.loc[self.df["CURRENCY"].eq("US$"), "TOTAL"].sum(),
+        )
 
     def CargaPlantilla(self):
-        self.cabecera=[]
-        self.detalle=[]
-        fecha1=pd.Timestamp.today().strftime("%Y%m%d")
-        fecha2=(pd.Timestamp.today()+pd.DateOffset(days=30)).strftime("%Y%m%d")
-
-        lastfolio=self.folio
-
-        cab={
-            "DocNum"                :"Correlativo",
-            "CardCode"             :"Codigo de Cliente",
-            "DocType"              :"DATO POR DEFECTO",
-            "ControlAccount"       :"Cuenta Comntable",
-            "DocDate"              :"Fecha de cierre contable  (Formato: AAAAMMDD)",
-            "DocDueDate"           :"Fecha de  Vencimiento (Formato: AAAAMMDD)",
-            "DocCurrency"          :"Moneda Extranjera, si es SOLES no aplica",
-            "TaxDate"              :"Fecha Emision de  Documento (Formato: AAAAMMDD)",
-            "Indicator"            :"Tipo de Documento Sunat - Ver tabla",
-            "FolioPrefixString"    :"Serie  Documento",
-            "FolioNumber"          :"Correlativo Documento",
-            "Comments"             :"Comentarios",
-            "Series"               :"Series",
-            "JournalMemo"          :"JrnlMemo",
-            "U_RP_DETRAC"          :"Tiene Detracción?",
-            "U_RP_COD_DETRACCION"  :"Codigo Detraccion",
-            "U_RP_VAL_DETRA"       :"Valor Detraccion",
-            "U_MSSL_PDT"           :"Porcentaje",
-            "PaymentGroupCode"     :"GroupNum"
-            }
-        self.cabecera.append(cab)
-        det={
-                'ParentKey':"Correlativo",
-                'LineNum':"Secuencia",
-                'U_MSS_SERVEN':"U_MSS_SERVEN",
-                'ItemDescription':"DescripciOn factura",
-                'PriceAfterVAT':"Saldo del Documento INC IGV",
-                'AccountCode':"Cuenta Contable Carga",
-                'CostingCode':"",
-                'CostingCode3':"",
-                'CostingCode4':"",
-                'TaxCode':"ESTANDAR"
-            }
-        self.detalle.append(det)
-
-        for index,row in self.df.iterrows():
-            cab={
-            "DocNum":index+1,
-            "CardCode":row["CODIGO"],
-            "DocType":"dDocument_Service",
-            "ControlAccount":row["CUENTA"],
-            "DocDate":fecha1,
-            "DocDueDate":fecha2,
-            "DocCurrency":row["CURRENCY"],
-            "TaxDate":fecha1,
-            "Indicator":"01",
-            "FolioPrefixString":"F001",
-            "FolioNumber":lastfolio+index,
-            "Comments":row["COMENTARIO"],
-            "Series":"161",
-            "JournalMemo":row["COMENTARIO"],
-            "U_RP_DETRAC":row["TIPDETRACCION"],
-            "U_RP_COD_DETRACCION":row["CODDETRACCION"],
-            "U_RP_VAL_DETRA":row["VALDETRACCION"],
-            "U_MSSL_PDT":row["PERDETRACCION"],
-            "PaymentGroupCode":"18"
-            }
-            self.cabecera.append(cab)
-            det={
-                'ParentKey':index+1,
-                'LineNum':"1",
-                'U_MSS_SERVEN':"SV0004",
-                'ItemDescription':row["GLOSA DE FACTURA"],
-                'PriceAfterVAT':row["TOTAL"],
-                'AccountCode':"759600000",
-                'CostingCode':"A0202000",
-                'CostingCode3':"",
-                'CostingCode4':"",
-                'TaxCode':"IGV_18"
-            }
-
-            self.detalle.append(det)
-        
-    def exportData(self,file_path):
-        if file_path=="" or file_path is None:
-            raise ValueError(f"No se ha seleccionado un arhivo.")
         if self.df is None:
-            raise ValueError("Aun no se ha cargado el archivo.")
-        
+            raise ValidationError("Aún no se ha procesado un archivo.")
+        self.cabecera = [
+            {
+                "DocNum": "Correlativo",
+                "CardCode": "Codigo de Cliente",
+                "DocType": "DATO POR DEFECTO",
+                "ControlAccount": "Cuenta Comntable",
+                "DocDate": "Fecha de cierre contable  (Formato: AAAAMMDD)",
+                "DocDueDate": "Fecha de  Vencimiento (Formato: AAAAMMDD)",
+                "DocCurrency": "Moneda Extranjera, si es SOLES no aplica",
+                "TaxDate": "Fecha Emision de  Documento (Formato: AAAAMMDD)",
+                "Indicator": "Tipo de Documento Sunat - Ver tabla",
+                "FolioPrefixString": "Serie  Documento",
+                "FolioNumber": "Correlativo Documento",
+                "Comments": "Comentarios",
+                "Series": "Series",
+                "JournalMemo": "JrnlMemo",
+                "U_RP_DETRAC": "Tiene Detracción?",
+                "U_RP_COD_DETRACCION": "Codigo Detraccion",
+                "U_RP_VAL_DETRA": "Valor Detraccion",
+                "U_MSSL_PDT": "Porcentaje",
+                "PaymentGroupCode": "GroupNum",
+            }
+        ]
+        self.detalle = [
+            {
+                "ParentKey": "Correlativo",
+                "LineNum": "Secuencia",
+                "U_MSS_SERVEN": "U_MSS_SERVEN",
+                "ItemDescription": "Descripcion factura",
+                "PriceAfterVAT": "Saldo del Documento INC IGV",
+                "AccountCode": "Cuenta Contable Carga",
+                "CostingCode": "",
+                "CostingCode3": "",
+                "CostingCode4": "",
+                "TaxCode": "ESTANDAR",
+            }
+        ]
+        today = pd.Timestamp.today().strftime("%Y%m%d")
+        due_date = (
+            pd.Timestamp.today() + pd.DateOffset(days=self.rules.due_days)
+        ).strftime("%Y%m%d")
+        for sequence, row in enumerate(
+            self.df.reset_index(drop=True).to_dict("records"), start=1
+        ):
+            self.cabecera.append(
+                {
+                    "DocNum": sequence,
+                    "CardCode": row["CODIGO"],
+                    "DocType": "dDocument_Service",
+                    "ControlAccount": row["CUENTA"],
+                    "DocDate": today,
+                    "DocDueDate": due_date,
+                    "DocCurrency": row["CURRENCY"],
+                    "TaxDate": today,
+                    "Indicator": "01",
+                    "FolioPrefixString": self.rules.folio_prefix,
+                    "FolioNumber": self.folio + sequence - 1,
+                    "Comments": row["COMENTARIO"],
+                    "Series": self.rules.series,
+                    "JournalMemo": row["COMENTARIO"],
+                    "U_RP_DETRAC": row["TIPDETRACCION"],
+                    "U_RP_COD_DETRACCION": row["CODDETRACCION"],
+                    "U_RP_VAL_DETRA": row["VALDETRACCION"],
+                    "U_MSSL_PDT": row["PERDETRACCION"],
+                    "PaymentGroupCode": self.rules.payment_group_code,
+                }
+            )
+            self.detalle.append(
+                {
+                    "ParentKey": sequence,
+                    "LineNum": "1",
+                    "U_MSS_SERVEN": self.rules.service_code,
+                    "ItemDescription": row["GLOSA DE FACTURA"],
+                    "PriceAfterVAT": row["TOTAL"],
+                    "AccountCode": self.rules.revenue_account,
+                    "CostingCode": self.rules.costing_code,
+                    "CostingCode3": "",
+                    "CostingCode4": "",
+                    "TaxCode": self.rules.tax_code,
+                }
+            )
+
+    def exportData(self, file_path):
+        if not file_path:
+            raise ValidationError("No se ha seleccionado una ruta de salida.")
+        if not self.cabecera or not self.detalle:
+            raise ValidationError("Aún no se ha procesado un archivo.")
         try:
-            df_cab=pd.DataFrame(self.cabecera)
-            df_det=pd.DataFrame(self.detalle)
-            with pd.ExcelWriter(file_path,engine="openpyxl") as writer:
-                df_cab.to_excel(writer,sheet_name="cabecera",index=False)
-                df_det.to_excel(writer,sheet_name="detalle",index=False)
+            with pd.ExcelWriter(file_path, engine="openpyxl") as writer:
+                pd.DataFrame(self.cabecera).to_excel(
+                    writer, sheet_name="cabecera", index=False
+                )
+                pd.DataFrame(self.detalle).to_excel(
+                    writer, sheet_name="detalle", index=False
+                )
             return f"✅ Archivo guardado en: {file_path}"
-        except Exception as e:
-            raise ValueError("Error al exportar el archivo")
+        except Exception as exc:
+            raise ExportError(f"No se pudo exportar el archivo: {exc}") from exc
+
     def exportTxt(self, file_path):
         if not file_path:
-            raise ValueError("No se ha seleccionado un archivo.")
-        if self.df is None:
-            raise ValueError("Aún no se ha cargado el archivo.")
-
+            raise ValidationError("No se ha seleccionado una ruta de salida.")
+        if not self.cabecera or not self.detalle:
+            raise ValidationError("Aún no se ha procesado un archivo.")
+        base_name = str(Path(file_path).with_suffix(""))
+        header_path = f"{base_name}_cabecera.txt"
+        detail_path = f"{base_name}_detalle.txt"
         try:
-            df_cab = pd.DataFrame(self.cabecera)
-            df_det = pd.DataFrame(self.detalle)
-
-            # Obtener la ruta y nombre base sin extensión
-            base_name, _ = os.path.splitext(file_path)
-
-            # Definir los nombres de los archivos TXT
-            cabecera_txt = f"{base_name}_cabecera.txt"
-            detalle_txt = f"{base_name}_detalle.txt"
-
-            # Exportar cada DataFrame a su respectivo archivo TXT
-            df_cab.to_csv(cabecera_txt, sep="\t", index=False)  # TXT separado por tabulador
-            df_det.to_csv(detalle_txt, sep="\t", index=False)  # TXT separado por tabulador
-
-            return f"✅ Archivos guardados en:\n- {cabecera_txt}\n- {detalle_txt}"
-        except Exception as e:
-            raise ValueError(f"Error al exportar los archivos: {e}")
-
-    
+            pd.DataFrame(self.cabecera).to_csv(
+                header_path, sep="\t", index=False, encoding="utf-8-sig"
+            )
+            pd.DataFrame(self.detalle).to_csv(
+                detail_path, sep="\t", index=False, encoding="utf-8-sig"
+            )
+            return f"✅ Archivos guardados en:\n- {header_path}\n- {detail_path}"
+        except Exception as exc:
+            raise ExportError(f"No se pudieron exportar los TXT: {exc}") from exc

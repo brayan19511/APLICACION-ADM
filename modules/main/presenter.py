@@ -1,10 +1,6 @@
 from core.presenter import BasePresenter
 from modules.main.model import MainModel
 from modules.main.view import MainView
-from PySide6.QtWidgets import QLabel
-from PySide6.QtGui import QFont
-from PySide6.QtCore import Qt
-
 from modules.adm_ncr_def.presenter import AdmDefPresenter
 from modules.fact_masivo_comercial.presenter import FacturasMasivoComercialPresenter
 
