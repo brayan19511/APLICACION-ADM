@@ -164,11 +164,14 @@ class GitHubReleaseUpdater:
             )
         target = Path(sys.executable).resolve()
         helper = downloaded_executable.with_name("install_update.ps1")
+        health_file = downloaded_executable.with_name("startup-ok.txt")
+        health_file.unlink(missing_ok=True)
         helper.write_text(
             """param(
     [Parameter(Mandatory=$true)][int]$PidToWait,
     [Parameter(Mandatory=$true)][string]$Source,
-    [Parameter(Mandatory=$true)][string]$Target
+    [Parameter(Mandatory=$true)][string]$Target,
+    [Parameter(Mandatory=$true)][string]$HealthFile
 )
 $ErrorActionPreference = "Stop"
 $Backup = "$Target.bak"
@@ -182,7 +185,30 @@ try {
         Move-Item -LiteralPath $Target -Destination $Backup -Force
     }
     Move-Item -LiteralPath $Source -Destination $Target -Force
-    Start-Process -FilePath $Target
+    $NewProcess = Start-Process -FilePath $Target -ArgumentList @("--update-health-file", $HealthFile) -PassThru
+    $Healthy = $false
+    for ($Attempt = 0; $Attempt -lt 60; $Attempt++) {
+        Start-Sleep -Milliseconds 500
+        if (Test-Path -LiteralPath $HealthFile) {
+            $Healthy = $true
+            break
+        }
+        if ($NewProcess.HasExited) {
+            break
+        }
+        $NewProcess.Refresh()
+    }
+    if (-not $Healthy) {
+        if (-not $NewProcess.HasExited) {
+            Stop-Process -Id $NewProcess.Id -Force -ErrorAction SilentlyContinue
+        }
+        Remove-Item -LiteralPath $Target -Force -ErrorAction SilentlyContinue
+        if (Test-Path -LiteralPath $Backup) {
+            Move-Item -LiteralPath $Backup -Destination $Target -Force
+        }
+        Start-Process -FilePath $Target
+        throw "La versión nueva no confirmó un inicio correcto."
+    }
     if (Test-Path -LiteralPath $Backup) {
         Remove-Item -LiteralPath $Backup -Force
     }
@@ -196,6 +222,7 @@ catch {
     }
 }
 finally {
+    Remove-Item -LiteralPath $HealthFile -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $MyInvocation.MyCommand.Path -Force -ErrorAction SilentlyContinue
 }
 """,
@@ -216,6 +243,8 @@ finally {
                 str(downloaded_executable),
                 "-Target",
                 str(target),
+                "-HealthFile",
+                str(health_file),
             ],
             creationflags=creation_flags,
             close_fds=True,

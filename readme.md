@@ -50,8 +50,9 @@ git push origin v2.1.4
 ```
 
 GitHub Actions ejecutará las pruebas, construirá `ADM.exe`, generará
-`ADM.exe.sha256` y creará el Release. Al iniciar, las instalaciones anteriores
-detectarán la versión, pedirán permiso y se reemplazarán automáticamente.
+`ADM.exe.sha256` y creará el Release en el mismo repositorio. Al iniciar, las
+instalaciones anteriores detectarán la versión, pedirán permiso y se
+reemplazarán automáticamente.
 
 El updater solo funciona dentro del `.exe`; al ejecutar `python main.py` se
 desactiva para no interferir con desarrollo.

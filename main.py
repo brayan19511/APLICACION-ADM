@@ -27,6 +27,14 @@ def resource_path(relative: str) -> Path:
     return base / relative
 
 
+def update_health_file() -> Path | None:
+    try:
+        index = sys.argv.index("--update-health-file")
+        return Path(sys.argv[index + 1])
+    except (ValueError, IndexError):
+        return None
+
+
 def run():
     configure_logging()
     app = QApplication(sys.argv)
@@ -38,6 +46,10 @@ def run():
 
     presenter = MainPresenter()
     presenter.run()
+    health_file = update_health_file()
+    if health_file is not None:
+        health_file.parent.mkdir(parents=True, exist_ok=True)
+        health_file.write_text(APP_VERSION, encoding="utf-8")
 
     update_controller = UpdateController(presenter.view)
     presenter.update_controller = update_controller
