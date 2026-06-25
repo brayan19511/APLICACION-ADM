@@ -55,6 +55,18 @@ class ProcesarComercial(BaseModel):
     def getDf(self):
         return self.df
 
+    @staticmethod
+    def get_sheet_names(file_path):
+        if not file_path:
+            raise ValidationError("No se ha seleccionado un archivo.")
+        path = Path(file_path)
+        if not path.is_file():
+            raise FileNotFoundError(f"El archivo '{path}' no existe.")
+        try:
+            return pd.ExcelFile(path).sheet_names
+        except Exception as exc:
+            raise ValidationError(f"No se pudieron leer las hojas: {exc}") from exc
+
     def CargarDataFrame(self, file_path, sheet_name, folio, tc):
         if not file_path:
             raise ValidationError("No se ha seleccionado un archivo.")

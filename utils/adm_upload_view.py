@@ -23,14 +23,14 @@ class UploadFile(QWidget):
 
         texto =QLabel("Seleccionar documento ")
         self.inputFile=QLineEdit()
-        btnExaminar=QPushButton("Examinar")
+        self.browse_button=QPushButton("Examinar")
 
-        btnExaminar.clicked.connect(self.openFileDialog)
+        self.browse_button.clicked.connect(self.openFileDialog)
         self.inputFile.setReadOnly(True)
 
         layout_upload.addWidget(texto)
         layout_upload.addWidget(self.inputFile)
-        layout_upload.addWidget(btnExaminar)
+        layout_upload.addWidget(self.browse_button)
         
         layouWidget.addWidget(upload_widget)
         layouWidget.setAlignment(upload_widget,Qt.AlignmentFlag.AlignTop) 
@@ -53,5 +53,8 @@ class UploadFile(QWidget):
 
     def getFile(self):
         return self.file_path
+
+    def set_enabled(self, enabled):
+        self.browse_button.setEnabled(enabled)
 
 

@@ -24,6 +24,8 @@ class AdmDefView(BaseView):
 
     def __init__(self):
         super().__init__()
+        self._busy = False
+        self._processed = False
         self.layout_Main = QVBoxLayout()
         title = QLabel("Revisión DEF")
         title.setAlignment(Qt.AlignmentFlag.AlignHCenter)
@@ -63,11 +65,19 @@ class AdmDefView(BaseView):
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.table, 1)
         self.layout_Main.addWidget(container, 1)
+        self._update_buttons()
 
     def _request_load(self):
         self.load_requested.emit(self.upload_file_widget.getFile() or "")
 
     def _request_export(self):
+        if not self._processed:
+            self.show_message(
+                "Primero debe cargar y procesar un archivo.",
+                "Sin datos para exportar",
+                "warning",
+            )
+            return
         stamp = datetime.now().strftime("%Y%m%d%H%M%S")
         path, _ = QFileDialog.getSaveFileName(
             self,
@@ -79,8 +89,17 @@ class AdmDefView(BaseView):
             self.export_requested.emit(path)
 
     def set_busy(self, busy: bool):
-        self.load_button.setEnabled(not busy)
-        self.export_button.setEnabled(not busy)
+        self._busy = busy
+        self._update_buttons()
+
+    def set_processed(self, processed: bool):
+        self._processed = processed
+        self._update_buttons()
+
+    def _update_buttons(self):
+        self.upload_file_widget.set_enabled(not self._busy)
+        self.load_button.setEnabled(not self._busy)
+        self.export_button.setEnabled(not self._busy)
 
     def show_statistics(self, values):
         count, amount, review_count, review_amount, unusual = values

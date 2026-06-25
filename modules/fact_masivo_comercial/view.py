@@ -1,6 +1,5 @@
 from datetime import datetime
 
-import pandas as pd
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QDoubleValidator, QFont, QIntValidator
 from PySide6.QtWidgets import (
@@ -23,12 +22,15 @@ from utils.adm_upload_view import UploadFile
 
 
 class FacturaMasivoComercialView(BaseView):
+    source_selected = Signal(str)
     load_requested = Signal(str, str, int, float)
     export_excel_requested = Signal(str)
     export_txt_requested = Signal(str)
 
     def __init__(self):
         super().__init__()
+        self._busy = False
+        self._processed = False
         self.layoutMain = QVBoxLayout()
         title = QLabel("Gestión Facturas Masivo Comercial")
         title.setFont(QFont("Arial", 16, QFont.Bold))
@@ -36,12 +38,13 @@ class FacturaMasivoComercialView(BaseView):
         self.layoutMain.addWidget(title)
 
         self.upload_file_widget = UploadFile(self.layoutMain)
-        self.upload_file_widget.file_selected.connect(self.updateComboBox)
+        self.upload_file_widget.file_selected.connect(self._source_changed)
         self._build_header()
         self._build_buttons()
         self._build_table()
         self._build_log()
         self.setLayout(self.layoutMain)
+        self._update_buttons()
 
     def _build_header(self):
         container = QWidget()
@@ -125,6 +128,13 @@ class FacturaMasivoComercialView(BaseView):
         )
 
     def _request_excel(self):
+        if not self._processed:
+            self.show_message(
+                "Primero debe cargar y procesar un archivo.",
+                "Sin datos para exportar",
+                "warning",
+            )
+            return
         stamp = datetime.now().strftime("%Y%m%d%H%M%S")
         path, _ = QFileDialog.getSaveFileName(
             self,
@@ -136,6 +146,13 @@ class FacturaMasivoComercialView(BaseView):
             self.export_excel_requested.emit(path)
 
     def _request_txt(self):
+        if not self._processed:
+            self.show_message(
+                "Primero debe cargar y procesar un archivo.",
+                "Sin datos para exportar",
+                "warning",
+            )
+            return
         stamp = datetime.now().strftime("%Y%m%d%H%M%S")
         path, _ = QFileDialog.getSaveFileName(
             self,
@@ -146,20 +163,31 @@ class FacturaMasivoComercialView(BaseView):
         if path:
             self.export_txt_requested.emit(path)
 
-    def updateComboBox(self, filepath):
-        try:
-            sheets = pd.ExcelFile(filepath).sheet_names
-            self.combo_sheet.clear()
-            self.combo_sheet.addItems(sheets)
-        except Exception as exc:
-            self.combo_sheet.clear()
-            self.show_message(
-                f"No se pudo leer el archivo: {exc}", "Archivo inválido", "warning"
-            )
+    def _source_changed(self, filepath):
+        self.combo_sheet.clear()
+        self.clear_statistics()
+        self.statusLog.clear()
+        self.set_processed(False)
+        self.source_selected.emit(filepath)
+
+    def show_sheets(self, sheets):
+        self.combo_sheet.clear()
+        self.combo_sheet.addItems(sheets)
 
     def set_busy(self, busy: bool):
-        for button in (self.load_button, self.excel_button, self.txt_button):
-            button.setEnabled(not busy)
+        self._busy = busy
+        self._update_buttons()
+
+    def set_processed(self, processed: bool):
+        self._processed = processed
+        self._update_buttons()
+
+    def _update_buttons(self):
+        self.upload_file_widget.set_enabled(not self._busy)
+        self.load_button.setEnabled(not self._busy)
+        enabled_export = not self._busy
+        self.excel_button.setEnabled(enabled_export)
+        self.txt_button.setEnabled(enabled_export)
 
     def log_status(self, message):
         self.statusLog.append(message)

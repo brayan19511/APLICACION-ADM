@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 import sys
 
-from PySide6.QtCore import QLockFile, QStandardPaths, QTimer
+from PySide6.QtCore import QLockFile, QStandardPaths, QThreadPool, QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox
 
@@ -78,6 +78,7 @@ def run():
     update_controller = UpdateController(presenter.view)
     presenter.update_controller = update_controller
     QTimer.singleShot(1500, update_controller.check_async)
+    app.aboutToQuit.connect(lambda: QThreadPool.globalInstance().waitForDone(5000))
     return app.exec()
 
 
