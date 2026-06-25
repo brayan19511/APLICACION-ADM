@@ -1,2 +1,2 @@
 APP_NAME = "ADM"
-APP_VERSION = "2.2.5"
+APP_VERSION = "2.3.1"
