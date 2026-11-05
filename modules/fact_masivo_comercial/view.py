@@ -1,7 +1,12 @@
 from datetime import datetime
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QDoubleValidator, QFont, QIntValidator
+from PySide6.QtCore import QRegularExpression, Qt, Signal
+from PySide6.QtGui import (
+    QDoubleValidator,
+    QFont,
+    QIntValidator,
+    QRegularExpressionValidator,
+)
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -17,13 +22,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from core.business_config import CommercialRules
 from core.view import BaseView
 from utils.adm_upload_view import UploadFile
 
 
 class FacturaMasivoComercialView(BaseView):
     source_selected = Signal(str)
-    load_requested = Signal(str, str, int, float)
+    load_requested = Signal(str, str, int, float, str, str)
     export_excel_requested = Signal(str)
     export_txt_requested = Signal(str)
 
@@ -51,6 +57,20 @@ class FacturaMasivoComercialView(BaseView):
         layout = QHBoxLayout(container)
         self.combo_sheet = QComboBox()
         self.combo_sheet.setFixedWidth(200)
+        rules = CommercialRules()
+        self.prefixTxt = QLineEdit(rules.folio_prefix)
+        self.prefixTxt.setMaxLength(4)
+        self.prefixTxt.setFixedWidth(60)
+        self.prefixTxt.setToolTip("FolioPrefixString (ej. F001, F002)")
+        self.prefixTxt.setValidator(
+            QRegularExpressionValidator(QRegularExpression(r"[A-Za-z0-9]{0,4}"), self)
+        )
+        self.seriesTxt = QLineEdit(rules.series)
+        self.seriesTxt.setFixedWidth(70)
+        self.seriesTxt.setToolTip("Series de SAP (ej. 161, 3028)")
+        self.seriesTxt.setValidator(
+            QRegularExpressionValidator(QRegularExpression(r"\d{0,10}"), self)
+        )
         self.folioTxt = QLineEdit()
         self.folioTxt.setValidator(QIntValidator(1, 2_147_483_647, self))
         self.tcTxt = QLineEdit()
@@ -63,6 +83,10 @@ class FacturaMasivoComercialView(BaseView):
         for widget in (
             QLabel("Seleccione la hoja:"),
             self.combo_sheet,
+            QLabel("Serie:"),
+            self.prefixTxt,
+            QLabel("Series:"),
+            self.seriesTxt,
             QLabel("Siguiente Folio:"),
             self.folioTxt,
             QLabel("T.C:"),
@@ -125,6 +149,8 @@ class FacturaMasivoComercialView(BaseView):
             self.combo_sheet.currentText(),
             folio,
             exchange_rate,
+            self.prefixTxt.text().strip().upper(),
+            self.seriesTxt.text().strip(),
         )
 
     def _request_excel(self):

@@ -67,12 +67,14 @@ class FacturasMasivoComercialPresenter(BasePresenter):
             invalidate_on_error=True,
         )
 
-    def load(self, path, sheet, folio, exchange_rate):
+    def load(self, path, sheet, folio, exchange_rate, folio_prefix, series):
         self.view.clear_statistics()
         self.view.set_processed(False)
 
         def operation():
-            self.model.CargarDataFrame(path, sheet, folio, exchange_rate)
+            self.model.CargarDataFrame(
+                path, sheet, folio, exchange_rate, folio_prefix, series
+            )
             self.model.ProcesarData()
             self.model.CargaPlantilla()
             return self.model.analizarData()

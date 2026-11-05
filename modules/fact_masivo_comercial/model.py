@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import unicodedata
 
 import pandas as pd
@@ -34,10 +35,16 @@ COMMERCIAL_REQUIRED_COLUMNS = (
 )
 
 
+FOLIO_PREFIX_PATTERN = re.compile(r"[A-Z0-9]{4}")
+SERIES_PATTERN = re.compile(r"\d{1,10}")
+
+
 def _sap_text(value: object) -> str:
     text = unicodedata.normalize("NFKD", str(value or "").upper())
     text = "".join(char for char in text if not unicodedata.combining(char))
-    return text.replace("/", "").replace("\\", "")
+    text = text.replace("/", "").replace("\\", "")
+    # Evita que Excel interprete el texto como fórmula (CSV/formula injection).
+    return text.lstrip("=+-@\t\r ")
 
 
 class ProcesarComercial(BaseModel):
@@ -48,6 +55,8 @@ class ProcesarComercial(BaseModel):
         self.detalle: list[dict] = []
         self.folio = 0
         self.tc = 0.0
+        self.folio_prefix = self.rules.folio_prefix
+        self.series = self.rules.series
 
     def getFilePath(self):
         return self.path
@@ -67,7 +76,21 @@ class ProcesarComercial(BaseModel):
         except Exception as exc:
             raise ValidationError(f"No se pudieron leer las hojas: {exc}") from exc
 
-    def CargarDataFrame(self, file_path, sheet_name, folio, tc):
+    def set_document_series(self, folio_prefix=None, series=None):
+        prefix = str(folio_prefix or self.rules.folio_prefix).strip().upper()
+        sap_series = str(series or self.rules.series).strip()
+        if not FOLIO_PREFIX_PATTERN.fullmatch(prefix):
+            raise ValidationError(
+                "La serie del documento debe tener 4 caracteres alfanuméricos (ej. F001)."
+            )
+        if not SERIES_PATTERN.fullmatch(sap_series):
+            raise ValidationError("El campo Series debe ser numérico (ej. 3028).")
+        self.folio_prefix = prefix
+        self.series = sap_series
+
+    def CargarDataFrame(
+        self, file_path, sheet_name, folio, tc, folio_prefix=None, series=None
+    ):
         if not file_path:
             raise ValidationError("No se ha seleccionado un archivo.")
         path = Path(file_path)
@@ -82,6 +105,7 @@ class ProcesarComercial(BaseModel):
             raise ValidationError("El folio y el tipo de cambio deben ser números.") from exc
         if self.folio <= 0 or self.tc <= 0:
             raise ValidationError("El folio y el tipo de cambio deben ser mayores que cero.")
+        self.set_document_series(folio_prefix, series)
         try:
             raw = pd.read_excel(path, sheet_name=sheet_name, dtype=object)
             self.df = normalize_columns(raw, COMMERCIAL_ALIASES)
@@ -195,7 +219,7 @@ class ProcesarComercial(BaseModel):
                 "U_RP_DETRAC": "Tiene Detracción?",
                 "U_RP_COD_DETRACCION": "Codigo Detraccion",
                 "U_RP_VAL_DETRA": "Valor Detraccion",
-                "U_MSSL_PDT": "Porcentaje",
+                "U_RP_PORC_DETRA": "Porcentaje",
                 "PaymentGroupCode": "GroupNum",
             }
         ]
@@ -231,15 +255,15 @@ class ProcesarComercial(BaseModel):
                     "DocCurrency": row["CURRENCY"],
                     "TaxDate": today,
                     "Indicator": "01",
-                    "FolioPrefixString": self.rules.folio_prefix,
+                    "FolioPrefixString": self.folio_prefix,
                     "FolioNumber": self.folio + sequence - 1,
                     "Comments": row["COMENTARIO"],
-                    "Series": self.rules.series,
+                    "Series": self.series,
                     "JournalMemo": row["COMENTARIO"],
                     "U_RP_DETRAC": row["TIPDETRACCION"],
                     "U_RP_COD_DETRACCION": row["CODDETRACCION"],
                     "U_RP_VAL_DETRA": row["VALDETRACCION"],
-                    "U_MSSL_PDT": row["PERDETRACCION"],
+                    "U_RP_PORC_DETRA": row["PERDETRACCION"],
                     "PaymentGroupCode": self.rules.payment_group_code,
                 }
             )

@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 
 from modules.adm_ncr_def.model import NcrBCPProcesor, NcrDefProcesor
+from core.exceptions import ValidationError
 from modules.fact_masivo_comercial.model import ProcesarComercial
 
 
@@ -118,6 +119,39 @@ class CommercialProcessorTests(unittest.TestCase):
             processor.CargarDataFrame(path, "Datos", 1, 3.75)
             processor.ProcesarData()
         self.assertEqual(processor.df.iloc[0]["CODIGO"], "C20123456789")
+
+    def test_document_series_and_detraction_percentage_field(self):
+        processor = ProcesarComercial()
+        processor.folio = 8674
+        processor.tc = 3.75
+        processor.set_document_series("f002", "3028")
+        processor.df = pd.DataFrame(
+            [
+                {
+                    "RUC": "20123456789",
+                    "GLOSA DE FACTURA": "=APOYO PROMOCIONAL",
+                    "MONEDA": "S/",
+                    "VALOR DE VENTA": 1000,
+                    "TOTAL": 1180,
+                }
+            ]
+        )
+        processor.ProcesarData()
+        processor.CargaPlantilla()
+        row = processor.cabecera[1]
+        self.assertEqual(row["FolioPrefixString"], "F002")
+        self.assertEqual(row["Series"], "3028")
+        self.assertEqual(row["FolioNumber"], 8674)
+        self.assertEqual(row["U_RP_PORC_DETRA"], "12")
+        self.assertNotIn("U_MSSL_PDT", row)
+        self.assertEqual(row["Comments"], "APOYO PROMOCIONAL")
+
+    def test_invalid_document_series_is_rejected(self):
+        processor = ProcesarComercial()
+        with self.assertRaises(ValidationError):
+            processor.set_document_series("F0", "3028")
+        with self.assertRaises(ValidationError):
+            processor.set_document_series("F002", "30A8")
 
 
 if __name__ == "__main__":
